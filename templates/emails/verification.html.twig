@@ -1,0 +1,13 @@
+{% extends 'emails/base.html.twig' %}
+
+{% block heading %}Bienvenue, {{ username }} !{% endblock %}
+
+{% block intro %}Plus qu'une étape : saisis ce code dans l'application pour confirmer ton adresse et activer ton compte.{% endblock %}
+
+{% block body %}
+  <div style="text-align:center;background:#F4F6F8;border:1px solid #E6E9EF;border-radius:12px;padding:18px 12px;">
+    <span style="font-family:'Courier New',Courier,monospace;font-size:34px;font-weight:800;letter-spacing:10px;color:#6D28D9;">{{ code }}</span>
+  </div>
+{% endblock %}
+
+{% block footnote %}Ce code expire dans 24 heures.{% endblock %}

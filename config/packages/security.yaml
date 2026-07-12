@@ -1,0 +1,68 @@
+security:
+    password_hashers:
+        Symfony\Component\Security\Core\User\PasswordAuthenticatedUserInterface: 'auto'
+
+    # Provider Doctrine : on charge le User via son email (base partagée avec le web)
+    providers:
+        app_user_provider:
+            entity:
+                class: App\Entity\User
+                property: email
+
+    firewalls:
+        dev:
+            pattern: ^/(_profiler|_wdt)/
+            security: false
+
+        # Endpoint de connexion : renvoie un JWT en cas de succès
+        login:
+            pattern: ^/api/login$
+            stateless: true
+            user_checker: App\Security\AccountStatusChecker
+            json_login:
+                check_path: /api/login
+                username_path: email
+                password_path: password
+                success_handler: lexik_jwt_authentication.handler.authentication_success
+                failure_handler: lexik_jwt_authentication.handler.authentication_failure
+
+        # Renouvellement du JWT via le refresh token
+        refresh:
+            pattern: ^/api/token/refresh
+            stateless: true
+            refresh_jwt:
+                check_path: /api/token/refresh
+
+        # Toutes les autres routes API : sans session, auth par JWT si un token est présent
+        api:
+            pattern: ^/api
+            stateless: true
+            provider: app_user_provider
+            user_checker: App\Security\AccountStatusChecker
+            jwt: ~
+
+    # Sécurité fine gérée par ressource via #[ApiResource(security: ...)].
+    # Ici on ouvre juste le login et la doc ; les endpoints de données réseau sont publics.
+    access_control:
+        - { path: ^/api/login, roles: PUBLIC_ACCESS }
+        - { path: ^/api/token/refresh, roles: PUBLIC_ACCESS }
+        - { path: ^/api/register, roles: PUBLIC_ACCESS }
+        - { path: ^/api/verify-email, roles: PUBLIC_ACCESS }
+        - { path: ^/api/forgot-password, roles: PUBLIC_ACCESS }
+        - { path: ^/api/reset-password, roles: PUBLIC_ACCESS }
+        - { path: ^/api/(docs|contexts|\.well-known|$), roles: PUBLIC_ACCESS }
+        - { path: ^/api/me, roles: IS_AUTHENTICATED_FULLY }
+        - { path: ^/api/stations, roles: IS_AUTHENTICATED_FULLY }
+        - { path: ^/api/bonplans, roles: IS_AUTHENTICATED_FULLY }
+        - { path: '^/api/lines/\d+/discussions', roles: IS_AUTHENTICATED_FULLY }
+        - { path: ^/api/discussions, roles: IS_AUTHENTICATED_FULLY }
+        - { path: ^/api/replies, roles: IS_AUTHENTICATED_FULLY }
+
+when@test:
+    security:
+        password_hashers:
+            Symfony\Component\Security\Core\User\PasswordAuthenticatedUserInterface:
+                algorithm: auto
+                cost: 4
+                time_cost: 3
+                memory_cost: 10

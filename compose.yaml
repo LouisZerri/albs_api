@@ -1,0 +1,10 @@
+# Dépendances de dev en conteneur (l'API, elle, tourne en local via `symfony server`).
+# Mailpit : catcher SMTP local pour tester les emails (vérif compte, reset password).
+services:
+    mailpit:
+        image: axllent/mailpit:latest
+        container_name: albs_mailpit
+        restart: unless-stopped
+        ports:
+            - "1025:1025"   # SMTP  (cf. MAILER_DSN=smtp://127.0.0.1:1025)
+            - "8025:8025"   # Interface web : http://localhost:8025
