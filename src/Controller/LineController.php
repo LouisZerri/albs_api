@@ -40,7 +40,8 @@ final class LineController extends AbstractController
     }
 
     /**
-     * Détail d'une ligne : stations ordonnées + correspondances par station (+ géométrie).
+     * Détail d'une ligne : stations ordonnées + correspondances par station. Volontairement léger
+     * (pas de tracé : la carte le prend dans /api/network) car l'app précharge les 16 lignes pour le hors-ligne.
      */
     #[Route('/api/lines/{id}', name: 'api_line_detail', methods: ['GET'], requirements: ['id' => '\d+'])]
     public function detail(Line $line): JsonResponse

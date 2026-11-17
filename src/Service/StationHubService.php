@@ -64,7 +64,6 @@ final class StationHubService
             'name' => $line->getName(),
             'color' => $line->getColor(),
             'textColor' => $line->getTextColor(),
-            'geometry' => $line->getGeometry(),
             // En-tête du « bloc boucle » quand la ligne a une desserte directionnelle, sinon null.
             'loop' => $topo !== null ? ['label' => $topo['label']] : null,
             'stations' => $stations,
