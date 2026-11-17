@@ -7,6 +7,7 @@ use App\Entity\User;
 use App\Service\BadgeService;
 use App\Service\ProfileStatsService;
 use App\Service\StationProgressService;
+use App\Service\VisitHistoryService;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\Routing\Attribute\Route;
@@ -31,6 +32,15 @@ final class ProgressController extends ApiController
     public function stats(#[CurrentUser] User $user, ProfileStatsService $stats): JsonResponse
     {
         return $this->json($stats->forUser($user));
+    }
+
+    /**
+     * Historique des visites : stations où l'utilisateur est descendu, datées, plus récentes d'abord.
+     */
+    #[Route('/api/me/history', name: 'api_me_history', methods: ['GET'])]
+    public function history(#[CurrentUser] User $user, VisitHistoryService $history): JsonResponse
+    {
+        return $this->json($history->forUser($user));
     }
 
     /**
