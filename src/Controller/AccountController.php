@@ -102,7 +102,7 @@ final class AccountController extends ApiController
     }
 
     /**
-     * Ajoute/retire un badge de la vitrine du profil (max 3). L'utilisateur doit le posséder.
+     * Ajoute/retire un badge de la vitrine du profil (max 2). L'utilisateur doit le posséder.
      */
     #[Route('/api/me/badges/{id}/display', name: 'api_me_badge_display', methods: ['PUT'], requirements: ['id' => '\d+'])]
     public function toggleDisplayBadge(

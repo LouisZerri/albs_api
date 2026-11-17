@@ -83,6 +83,18 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
     #[Groups(['user:create'])]
     private ?string $plainPassword = null;
 
+    /**
+     * Acceptation des CGU à l'inscription (jamais persistée telle quelle) : exigée à `true`,
+     * puis horodatée dans `termsAcceptedAt` par UserRegisterProcessor.
+     */
+    #[Assert\IsTrue(message: 'Tu dois accepter les conditions d’utilisation.', groups: ['user:create'])]
+    #[Groups(['user:create'])]
+    private bool $acceptedTerms = false;
+
+    // Date d'acceptation des CGU (trace légale). Null = compte antérieur à cette trace.
+    #[ORM\Column(nullable: true)]
+    private ?\DateTimeImmutable $termsAcceptedAt = null;
+
     #[ORM\Column(type: 'json')]
     private array $roles = [];
 
@@ -435,6 +447,30 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
     }
 
     // ========== ONBOARDING ==========
+
+    public function getAcceptedTerms(): bool
+    {
+        return $this->acceptedTerms;
+    }
+
+    public function setAcceptedTerms(bool $acceptedTerms): static
+    {
+        $this->acceptedTerms = $acceptedTerms;
+
+        return $this;
+    }
+
+    public function getTermsAcceptedAt(): ?\DateTimeImmutable
+    {
+        return $this->termsAcceptedAt;
+    }
+
+    public function setTermsAcceptedAt(?\DateTimeImmutable $termsAcceptedAt): static
+    {
+        $this->termsAcceptedAt = $termsAcceptedAt;
+
+        return $this;
+    }
 
     public function getOnboardingCompletedAt(): ?\DateTimeImmutable
     {

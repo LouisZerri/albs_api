@@ -37,6 +37,8 @@ final class UserRegisterProcessor implements ProcessorInterface
             $data->setPassword($this->hasher->hashPassword($data, $data->getPlainPassword()));
             $data->eraseCredentials();
             $data->generateEmailVerificationToken();
+            // Trace légale du consentement (la validation a déjà exigé acceptedTerms = true).
+            $data->setTermsAcceptedAt(new \DateTimeImmutable());
         }
 
         $result = $this->persistProcessor->process($data, $operation, $uriVariables, $context);
