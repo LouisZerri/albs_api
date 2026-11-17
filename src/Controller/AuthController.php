@@ -58,7 +58,7 @@ final class AuthController extends ApiController
             }
         }
 
-        return $this->json(['message' => 'Si un compte existe pour cet email, un lien de réinitialisation vient d\'être envoyé.']);
+        return $this->json(['message' => 'Si un compte existe pour cet email, un code de réinitialisation vient d\'être envoyé.']);
     }
 
     /**

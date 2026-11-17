@@ -206,7 +206,7 @@ final class English
         'Compte supprimé.' => 'Account deleted.',
         'Impossible de créer le dossier d\'upload.' => 'Could not create the upload folder.',
         'Échec de l\'enregistrement de l\'image.' => 'The image could not be saved.',
-        'Si un compte existe pour cet email, un lien de réinitialisation vient d\'être envoyé.' => 'If an account exists for this email, a reset link has just been sent.',
+        'Si un compte existe pour cet email, un code de réinitialisation vient d\'être envoyé.' => 'If an account exists for this email, a reset code has just been sent.',
         'Avertissement introuvable.' => 'Warning not found.',
         'Avertissement lu.' => 'Warning marked as read.',
         'Bon plan soumis. Il apparaîtra après modération.' => 'Spot submitted. It will appear once reviewed.',
