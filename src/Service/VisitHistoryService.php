@@ -29,18 +29,7 @@ final class VisitHistoryService
      */
     public function forUser(User $user): array
     {
-        $firstVisit = []; // nom de station => date de la toute première descente
-        foreach ($this->userStations->findByUserWithStations($user) as $us) {
-            $at = $us->getFirstStoppedAt();
-            $name = $us->getStation()?->getName();
-            if (!$us->isStopped() || $at === null || $name === null) {
-                continue;
-            }
-            if (!isset($firstVisit[$name]) || $at < $firstVisit[$name]) {
-                $firstVisit[$name] = $at;
-            }
-        }
-
+        $firstVisit = $this->firstVisits($user);
         arsort($firstVisit); // objets DateTime comparables : plus récent d'abord
 
         $linesByName = $this->stations->linesByStationName();
@@ -54,5 +43,27 @@ final class VisitHistoryService
         }
 
         return $visits;
+    }
+
+    /**
+     * Date de la toute première descente à chaque station physique (nom de station => date).
+     *
+     * @return array<string, \DateTimeImmutable>
+     */
+    public function firstVisits(User $user): array
+    {
+        $firstVisit = [];
+        foreach ($this->userStations->findByUserWithStations($user) as $us) {
+            $at = $us->getFirstStoppedAt();
+            $name = $us->getStation()?->getName();
+            if (!$us->isStopped() || $at === null || $name === null) {
+                continue;
+            }
+            if (!isset($firstVisit[$name]) || $at < $firstVisit[$name]) {
+                $firstVisit[$name] = $at;
+            }
+        }
+
+        return $firstVisit;
     }
 }

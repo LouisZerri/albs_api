@@ -75,4 +75,21 @@ class StationRepository extends ServiceEntityRepository
 
         return $map;
     }
+
+    /**
+     * Un quai représentatif par station physique (nom de station => plus petit id), pour ouvrir
+     * l'écran d'une station à partir de son nom.
+     *
+     * @return array<string, int>
+     */
+    public function representativeIdsByName(): array
+    {
+        $rows = $this->createQueryBuilder('s')
+            ->select('s.name AS name, MIN(s.id) AS id')
+            ->groupBy('s.name')
+            ->getQuery()
+            ->getArrayResult();
+
+        return array_map('intval', array_column($rows, 'id', 'name'));
+    }
 }

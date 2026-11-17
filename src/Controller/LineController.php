@@ -2,6 +2,7 @@
 
 namespace App\Controller;
 
+use App\Content\StationFacts;
 use App\Entity\Line;
 use App\Repository\BonplanRepository;
 use App\Repository\LineRepository;
@@ -105,6 +106,7 @@ final class LineController extends AbstractController
             $stations[$i] += $positions[$station['name']];
             $stations[$i]['lines'] = array_values($linesByName[$station['name']] ?? []);
             $stations[$i]['bonplanCount'] = $bonplanCounts[$station['name']] ?? 0;
+            $stations[$i]['fact'] = StationFacts::for($station['name']);
         }
 
         return $this->json(['lines' => $lines, 'stations' => $stations]);

@@ -18,6 +18,7 @@ final class ProfileStatsService
     public function __construct(
         private readonly UserStationRepository $userStations,
         private readonly LineRepository $lines,
+        private readonly ChallengeService $challenges,
     ) {
     }
 
@@ -26,6 +27,7 @@ final class ProfileStatsService
      *     stations: array{total:int, visited:int, passed:int},
      *     percent: int,
      *     resumeLineId: ?int,
+     *     challenges: list<array<string, mixed>>,
      *     lines: list<array{id:int, number:string, name:string, color:string, textColor:?string, total:int, visited:int, passed:int, percent:int}>
      * }
      */
@@ -94,6 +96,7 @@ final class ProfileStatsService
             ],
             'percent' => $totalStations > 0 ? (int) round($totalVisited / $totalStations * 100) : 0,
             'resumeLineId' => $this->resumeLineId($lines, $lastActivity),
+            'challenges' => $this->challenges->forUser($user, $lines),
             'lines' => $lines,
         ];
     }

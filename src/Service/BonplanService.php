@@ -2,6 +2,7 @@
 
 namespace App\Service;
 
+use App\Content\StationFacts;
 use App\Entity\Bonplan;
 use App\Entity\BonplanFavorite;
 use App\Entity\Station;
@@ -86,6 +87,8 @@ final class BonplanService
                 'lat' => $lats !== [] ? array_sum($lats) / count($lats) : null,
                 'lng' => $lngs !== [] ? array_sum($lngs) / count($lngs) : null,
                 'lines' => array_values($lines),
+                // « Pourquoi descendre ici ? » (null si la station n'a pas de texte).
+                'fact' => StationFacts::for((string) $station->getName()),
             ],
             'bonplans' => array_map(
                 fn (Bonplan $b) => $this->toArray($b, isset($favSet[$b->getId()])),
