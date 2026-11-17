@@ -49,6 +49,24 @@ final class LineController extends AbstractController
     }
 
     /**
+     * Index de tous les quais : { id, name, lineId }. Léger et quasi immuable, il permet à l'app
+     * d'appliquer hors ligne la règle du hub (« descendu » = tous les quais de même nom) et de
+     * recalculer les compteurs sans le serveur. Données publiques.
+     */
+    #[Route('/api/network/platforms', name: 'api_network_platforms', methods: ['GET'])]
+    public function platforms(): JsonResponse
+    {
+        $platforms = [];
+        foreach ($this->lines->findAllWithStations() as $line) {
+            foreach ($line->getStations() as $s) {
+                $platforms[] = ['id' => $s->getId(), 'name' => $s->getName(), 'lineId' => $line->getId()];
+            }
+        }
+
+        return $this->json($platforms);
+    }
+
+    /**
      * Tout le réseau pour la carte : géométrie de chaque ligne + stations (dédupliquées par nom).
      * Le point de chaque station est recalé sur le tracé de ses lignes (StationSnapper).
      * `bonplanCount` = bons plans autour de la station (lien vers l'onglet Bons plans).

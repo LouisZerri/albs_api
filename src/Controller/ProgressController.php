@@ -71,6 +71,7 @@ final class ProgressController extends ApiController
             $station,
             (bool) ($payload['passed'] ?? false),
             (bool) ($payload['stopped'] ?? false),
+            $this->actionTime($payload['at'] ?? null),
         );
 
         // Attribution automatique : les badges éventuellement débloqués sont renvoyés
@@ -83,5 +84,22 @@ final class ProgressController extends ApiController
             [],
             ['groups' => ['progress:read']],
         );
+    }
+
+    /**
+     * Heure du cochage envoyée par l'app (`at`, ISO 8601) pour les actions faites hors ligne.
+     * Illisible ou absente → null (le service prendra l'heure du serveur).
+     */
+    private function actionTime(mixed $value): ?\DateTimeImmutable
+    {
+        if (!is_string($value) || $value === '') {
+            return null;
+        }
+
+        try {
+            return new \DateTimeImmutable($value);
+        } catch (\Exception) {
+            return null;
+        }
     }
 }
