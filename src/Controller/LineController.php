@@ -3,8 +3,10 @@
 namespace App\Controller;
 
 use App\Entity\Line;
+use App\Repository\BonplanRepository;
 use App\Repository\LineRepository;
 use App\Service\StationHubService;
+use App\Service\StationSnapper;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\Routing\Attribute\Route;
@@ -14,6 +16,8 @@ final class LineController extends AbstractController
     public function __construct(
         private readonly StationHubService $hub,
         private readonly LineRepository $lines,
+        private readonly StationSnapper $snapper,
+        private readonly BonplanRepository $bonplans,
     ) {
     }
 
@@ -45,6 +49,8 @@ final class LineController extends AbstractController
 
     /**
      * Tout le réseau pour la carte : géométrie de chaque ligne + stations (dédupliquées par nom).
+     * Le point de chaque station est recalé sur le tracé de ses lignes (StationSnapper).
+     * `bonplanCount` = bons plans autour de la station (lien vers l'onglet Bons plans).
      * Données publiques.
      */
     #[Route('/api/network', name: 'api_network', methods: ['GET'])]
@@ -54,6 +60,9 @@ final class LineController extends AbstractController
         $stations = [];
         $index = [];        // nom → index dans $stations (déduplication)
         $linesByName = [];  // nom → [lineId => badge de ligne] (correspondances)
+        $platforms = [];    // nom → coordonnées de chaque quai
+        $lineIds = [];      // nom → ids des lignes desservant la station
+        $geometryByLine = [];
 
         foreach ($this->lines->findAllWithStations() as $line) {
             $lineBadge = [
@@ -69,28 +78,33 @@ final class LineController extends AbstractController
                 'textColor' => $line->getTextColor(),
                 'geometry' => $line->getGeometry(),
             ];
+            $geometryByLine[$line->getId()] = $line->getGeometry();
 
             foreach ($line->getStations() as $s) {
                 $name = $s->getName();
                 // Toute ligne desservant ce nom est une correspondance (dédup par lineId).
                 $linesByName[$name][$line->getId()] = $lineBadge;
 
-                if (isset($index[$name]) || $s->getLatitude() === null || $s->getLongitude() === null) {
+                if ($s->getLatitude() === null || $s->getLongitude() === null) {
                     continue;
                 }
-                $index[$name] = count($stations);
-                $stations[] = [
-                    'id' => $s->getId(),
-                    'name' => $name,
-                    'lat' => $s->getLatitude(),
-                    'lng' => $s->getLongitude(),
-                ];
+                $platforms[$name][] = ['lat' => $s->getLatitude(), 'lng' => $s->getLongitude()];
+                $lineIds[$name][$line->getId()] = $line->getId();
+
+                if (!isset($index[$name])) {
+                    $index[$name] = count($stations);
+                    $stations[] = ['id' => $s->getId(), 'name' => $name];
+                }
             }
         }
 
-        // Attache à chaque station la liste (ordonnée, sans doublon) de ses lignes.
+        // Position recalée sur le tracé + liste (ordonnée, sans doublon) des lignes de la station.
+        $bonplanCounts = $this->bonplans->countByStationName();
+        $positions = $this->snapper->snapAll($platforms, array_map(array_values(...), $lineIds), $geometryByLine);
         foreach ($stations as $i => $station) {
+            $stations[$i] += $positions[$station['name']];
             $stations[$i]['lines'] = array_values($linesByName[$station['name']] ?? []);
+            $stations[$i]['bonplanCount'] = $bonplanCounts[$station['name']] ?? 0;
         }
 
         return $this->json(['lines' => $lines, 'stations' => $stations]);

@@ -3,6 +3,7 @@
 namespace App\Service;
 
 use App\Entity\Line;
+use App\Repository\BonplanRepository;
 use App\Repository\LineRepository;
 
 /**
@@ -17,6 +18,7 @@ final class StationHubService
     public function __construct(
         private readonly LineRepository $lines,
         private readonly LineTopology $topology,
+        private readonly BonplanRepository $bonplans,
     ) {
     }
 
@@ -30,6 +32,7 @@ final class StationHubService
     {
         $lineMap = $this->buildLineMap();
         $topo = $this->topology->forLineNumber($line->getNumber());
+        $bonplanCounts = $this->bonplans->countByStationName();
 
         $stations = [];
         foreach ($line->getStations() as $station) {
@@ -48,6 +51,8 @@ final class StationHubService
                 'latitude' => $station->getLatitude(),
                 'longitude' => $station->getLongitude(),
                 'correspondences' => $correspondences,
+                // Bons plans autour de la station physique (lien vers l'onglet Bons plans).
+                'bonplanCount' => $bonplanCounts[$station->getName()] ?? 0,
                 // Desserte à sens unique (boucle 10 / 7bis) ; null = desservie dans les deux sens.
                 'directionLabel' => $topo['directions'][$station->getName()] ?? null,
             ];
