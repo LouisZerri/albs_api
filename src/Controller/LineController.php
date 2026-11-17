@@ -8,6 +8,7 @@ use App\Repository\BonplanRepository;
 use App\Repository\LineRepository;
 use App\Service\StationHubService;
 use App\Service\StationSnapper;
+use App\Service\TrackCleaner;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\Routing\Attribute\Route;
@@ -19,6 +20,7 @@ final class LineController extends AbstractController
         private readonly LineRepository $lines,
         private readonly StationSnapper $snapper,
         private readonly BonplanRepository $bonplans,
+        private readonly TrackCleaner $tracks,
     ) {
     }
 
@@ -68,7 +70,8 @@ final class LineController extends AbstractController
     }
 
     /**
-     * Tout le réseau pour la carte : géométrie de chaque ligne + stations (dédupliquées par nom).
+     * Tout le réseau pour la carte : tracé de chaque ligne (nettoyé de ses doublons et voies de
+     * service par TrackCleaner) + stations (dédupliquées par nom).
      * Le point de chaque station est recalé sur le tracé de ses lignes (StationSnapper).
      * `bonplanCount` = bons plans autour de la station (lien vers l'onglet Bons plans).
      * Données publiques.
@@ -83,8 +86,22 @@ final class LineController extends AbstractController
         $platforms = [];    // nom → coordonnées de chaque quai
         $lineIds = [];      // nom → ids des lignes desservant la station
         $geometryByLine = [];
+        $allLines = $this->lines->findAllWithStations();
 
-        foreach ($this->lines->findAllWithStations() as $line) {
+        // Tracés nettoyés : c'est sur eux que les lignes sont dessinées ET que les points sont recalés.
+        $rawGeometry = [];
+        $platformsByLine = [];
+        foreach ($allLines as $line) {
+            $rawGeometry[$line->getId()] = $line->getGeometry();
+            foreach ($line->getStations() as $s) {
+                if ($s->getLatitude() !== null && $s->getLongitude() !== null) {
+                    $platformsByLine[$line->getId()][] = ['lat' => $s->getLatitude(), 'lng' => $s->getLongitude()];
+                }
+            }
+        }
+        $geometryByLine = $this->tracks->cleanAll($rawGeometry, $platformsByLine);
+
+        foreach ($allLines as $line) {
             $lineBadge = [
                 'lineId' => $line->getId(),
                 'number' => $line->getNumber(),
@@ -96,9 +113,8 @@ final class LineController extends AbstractController
                 'number' => $line->getNumber(),
                 'color' => $line->getColor(),
                 'textColor' => $line->getTextColor(),
-                'geometry' => $line->getGeometry(),
+                'geometry' => $geometryByLine[$line->getId()] ?? [],
             ];
-            $geometryByLine[$line->getId()] = $line->getGeometry();
 
             foreach ($line->getStations() as $s) {
                 $name = $s->getName();
