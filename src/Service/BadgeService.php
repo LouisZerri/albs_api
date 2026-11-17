@@ -97,7 +97,7 @@ final class BadgeService
     /**
      * Tous les badges avec leur statut (débloqué + progression %) pour l'écran Profil.
      *
-     * @return list<array{id:int, name:string, description:?string, icon:string, type:?string, earned:bool, progress:int}>
+     * @return list<array{id:int, name:string, description:?string, icon:string, type:?string, earned:bool, progress:int, current:?int, target:?int}>
      */
     public function statusFor(User $user): array
     {
@@ -111,6 +111,7 @@ final class BadgeService
         $out = [];
         foreach ($this->badges->findAll() as $badge) {
             $isOwned = isset($owned[$badge->getId()]);
+            $counter = $isOwned ? null : $this->counter($badge, $ctx);
             $out[] = [
                 'id' => $badge->getId(),
                 'name' => $badge->getName(),
@@ -121,6 +122,9 @@ final class BadgeService
                 'type' => $badge->getType(),
                 'earned' => $isOwned,
                 'progress' => $isOwned ? 100 : $this->progress($badge, $ctx),
+                // Compteur lisible (« 12 / 20 ») pour les badges à débloquer ; null si sans compteur.
+                'current' => $counter !== null ? min($counter[0], $counter[1]) : null,
+                'target' => $counter[1] ?? null,
             ];
         }
 
@@ -239,41 +243,49 @@ final class BadgeService
     }
 
     /**
+     * Avancement chiffré d'un badge à compteur : [acquis, objectif] (ex. 12 stations sur 20).
+     * null pour les badges « oui/non » (visite de nuit, compte créé…), qui n'ont pas de compteur.
+     *
+     * @param array{totalPassed:int, totalStopped:int, totalStations:int, completedLines:int, maxPassedOnLine:int, maxInOneDay:int, hasNight:bool, hasEarly:bool} $c
+     *
+     * @return array{int, int}|null
+     */
+    private function counter(Badge $badge, array $c): ?array
+    {
+        $cr = $badge->getCriteria();
+
+        return match (true) {
+            isset($cr['stopped']) => [$c['totalStopped'], (int) $cr['stopped']],
+            isset($cr['passed']) => [$c['totalPassed'], (int) $cr['passed']],
+            isset($cr['line_complete']) => [$c['completedLines'], (int) $cr['line_complete']],
+            !empty($cr['all_stations']) => [$c['totalStopped'], $c['totalStations']],
+            isset($cr['daily_marathon']) => [$c['maxInOneDay'], (int) $cr['daily_marathon']],
+            isset($cr['line_passed_same']) => [$c['maxPassedOnLine'], (int) $cr['line_passed_same']],
+            default => null,
+        };
+    }
+
+    /**
+     * Pourcentage vers le déblocage (0–100).
+     *
      * @param array{totalPassed:int, totalStopped:int, totalStations:int, completedLines:int, maxPassedOnLine:int, maxInOneDay:int, hasNight:bool, hasEarly:bool} $c
      */
     private function progress(Badge $badge, array $c): int
     {
-        $cr = $badge->getCriteria();
+        $counter = $this->counter($badge, $c);
+        if ($counter !== null) {
+            return $this->pct($counter[0], $counter[1]);
+        }
 
-        if (isset($cr['stopped'])) {
-            return $this->pct($c['totalStopped'], (int) $cr['stopped']);
-        }
-        if (isset($cr['passed'])) {
-            return $this->pct($c['totalPassed'], (int) $cr['passed']);
-        }
-        if (isset($cr['line_complete'])) {
-            return $this->pct($c['completedLines'], (int) $cr['line_complete']);
-        }
-        if (!empty($cr['all_stations'])) {
-            return $this->pct($c['totalStopped'], $c['totalStations']);
-        }
-        if (isset($cr['daily_marathon'])) {
-            return $this->pct($c['maxInOneDay'], (int) $cr['daily_marathon']);
-        }
-        if (isset($cr['line_passed_same'])) {
-            return $this->pct($c['maxPassedOnLine'], (int) $cr['line_passed_same']);
-        }
+        $cr = $badge->getCriteria();
         if (!empty($cr['night_visit'])) {
             return $c['hasNight'] ? 100 : 0;
         }
         if (!empty($cr['early_visit'])) {
             return $c['hasEarly'] ? 100 : 0;
         }
-        if (!empty($cr['account_created'])) {
-            return 100;
-        }
 
-        return 0;
+        return !empty($cr['account_created']) ? 100 : 0;
     }
 
     private function pct(int $have, int $need): int

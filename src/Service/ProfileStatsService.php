@@ -4,21 +4,19 @@ namespace App\Service;
 
 use App\Entity\User;
 use App\Repository\LineRepository;
-use App\Repository\StationRepository;
 use App\Repository\UserStationRepository;
 
 /**
  * Statistiques de progression d'un utilisateur (pour l'écran Carte / Profil).
  * Cohérent avec le web : « visité » = station où l'on est descendu (stopped).
  *
- * v1 : comptage par quai (station row). v2 (hub) : comptage par station physique.
+ * Global : comptage par station PHYSIQUE (même nom = une station). Par ligne : comptage par quai.
  */
 final class ProfileStatsService
 {
     public function __construct(
         private readonly UserStationRepository $userStations,
         private readonly LineRepository $lines,
-        private readonly StationRepository $stations,
     ) {
     }
 
@@ -34,18 +32,17 @@ final class ProfileStatsService
         // Map stationId => UserStation + compteurs globaux
         $byStationId = [];
         $totalPassed = 0;
-        $totalStopped = 0;
         foreach ($this->userStations->findByUserWithStations($user) as $us) {
             $byStationId[$us->getStation()->getId()] = $us;
             if ($us->isPassed()) {
                 $totalPassed++;
             }
-            if ($us->isStopped()) {
-                $totalStopped++;
-            }
         }
 
-        $totalStations = $this->stations->count([]);
+        // Global = stations PHYSIQUES (regroupées par nom, comme les correspondances) : Châtelet compte
+        // pour une station, pas pour ses 5 quais. « Passé » reste par quai (règle : propre à la ligne).
+        $allNames = [];
+        $visitedNames = [];
 
         $lines = [];
         foreach ($this->lines->findAllWithStations() as $line) {
@@ -55,12 +52,14 @@ final class ProfileStatsService
             $passed = 0;
 
             foreach ($stations as $station) {
+                $allNames[$station->getName()] = true;
                 $us = $byStationId[$station->getId()] ?? null;
                 if ($us === null) {
                     continue;
                 }
                 if ($us->isStopped()) {
                     $visited++;
+                    $visitedNames[$station->getName()] = true;
                 }
                 if ($us->isPassed()) {
                     $passed++;
@@ -80,13 +79,16 @@ final class ProfileStatsService
             ];
         }
 
+        $totalStations = count($allNames);
+        $totalVisited = count($visitedNames);
+
         return [
             'stations' => [
                 'total' => $totalStations,
-                'visited' => $totalStopped,
+                'visited' => $totalVisited,
                 'passed' => $totalPassed,
             ],
-            'percent' => $totalStations > 0 ? (int) round($totalStopped / $totalStations * 100) : 0,
+            'percent' => $totalStations > 0 ? (int) round($totalVisited / $totalStations * 100) : 0,
             'lines' => $lines,
         ];
     }
