@@ -154,7 +154,8 @@ final class BadgeService
                 $totalStopped++;
             }
 
-            $stoppedAt = $us->getFirstStoppedAt();
+            // Seulement si la station est encore cochée : une station décochée garde sa date en base.
+            $stoppedAt = $us->isStopped() ? $us->getFirstStoppedAt() : null;
             if ($stoppedAt !== null) {
                 $hour = (int) $stoppedAt->format('H');
                 if (($hour >= 22 && $hour <= 23) || ($hour >= 0 && $hour <= 5)) {

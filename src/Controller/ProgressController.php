@@ -4,8 +4,10 @@ namespace App\Controller;
 
 use App\Entity\Station;
 use App\Entity\User;
+use App\Entity\UserStation;
 use App\Service\BadgeService;
 use App\Service\ProfileStatsService;
+use App\Service\ProgressThrottle;
 use App\Service\StationProgressService;
 use App\Service\VisitHistoryService;
 use Symfony\Component\HttpFoundation\JsonResponse;
@@ -22,7 +24,13 @@ final class ProgressController extends ApiController
     #[Route('/api/me/progress', name: 'api_me_progress', methods: ['GET'])]
     public function myProgress(#[CurrentUser] User $user): JsonResponse
     {
-        return $this->json($user->getUserStations(), 200, [], ['groups' => ['progress:read']]);
+        // Une station décochée garde sa ligne en base (dates d'origine, cf. StationProgressService) :
+        // pour l'app, c'est une station « à faire », donc absente de la progression.
+        $entries = $user->getUserStations()
+            ->filter(static fn (UserStation $us) => $us->isPassed() || $us->isStopped())
+            ->getValues();
+
+        return $this->json($entries, 200, [], ['groups' => ['progress:read']]);
     }
 
     /**
@@ -54,7 +62,8 @@ final class ProgressController extends ApiController
 
     /**
      * Définit l'état d'une station pour l'utilisateur courant.
-     * Body : { "passed": bool, "stopped": bool }
+     * Body : { "passed": bool, "stopped": bool, "at"?: date ISO du cochage }
+     * 429 au-delà du plafond de cochages par minute (ProgressThrottle).
      */
     #[Route('/api/stations/{id}/progress', name: 'api_station_progress', methods: ['PUT'], requirements: ['id' => '\d+'])]
     public function setStatus(
@@ -63,7 +72,10 @@ final class ProgressController extends ApiController
         #[CurrentUser] User $user,
         StationProgressService $progress,
         BadgeService $badges,
+        ProgressThrottle $throttle,
     ): JsonResponse {
+        $throttle->hit($user);
+
         $payload = $this->payload($request);
 
         $entry = $progress->setStatus(

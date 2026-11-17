@@ -68,6 +68,9 @@ final class ApiExceptionListener
             default => 'Une erreur est survenue.',
         };
 
-        $event->setResponse(new JsonResponse(['message' => $message, 'status' => $status], $status));
+        // En-têtes portés par l'exception (ex. Retry-After d'un 429).
+        $headers = $throwable instanceof HttpExceptionInterface ? $throwable->getHeaders() : [];
+
+        $event->setResponse(new JsonResponse(['message' => $message, 'status' => $status], $status, $headers));
     }
 }

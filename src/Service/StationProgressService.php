@@ -23,6 +23,8 @@ final class StationProgressService
 {
     /** Durée maximale pendant laquelle un cochage fait hors ligne garde son heure d'origine. */
     private const MAX_OFFLINE_DAYS = 30;
+    /** Décochée moins longtemps que ça après sa première fois, une station est considérée cochée par erreur. */
+    private const MISTAKE_WINDOW_SECONDS = 600;
 
     public function __construct(
         private readonly EntityManagerInterface $em,
@@ -60,7 +62,12 @@ final class StationProgressService
     /**
      * Upsert d'une ligne de progression.
      * $passed = null → on conserve la valeur existante (utilisé pour les quais voisins).
-     * Si l'état final est « ni passé ni descendu » → la ligne est supprimée (station « à faire »).
+     *
+     * Une station décochée GARDE sa ligne en base (ni passé ni descendu), comme sur le web. Cela sert à :
+     *  - conserver la date de première visite : décocher puis recocher ne « rajeunit » pas une
+     *    vieille station (sinon on gonflerait les défis de la semaine, et une fausse manip
+     *    effacerait la vraie date de l'historique) ;
+     *  - appliquer « le plus récent gagne » même après un décochage.
      */
     private function upsert(
         User $user,
@@ -71,36 +78,64 @@ final class StationProgressService
     ): UserStation {
         $entry = $this->userStations->findOneBy(['user' => $user, 'station' => $station])
             ?? (new UserStation())->setUser($user)->setStation($station)->setPassed(false)->setStopped(false);
+        $isNew = $entry->getId() === null;
 
         // Le plus récent gagne : un cochage hors ligne qui arrive en retard ne doit pas écraser un
         // changement fait ENTRE-TEMPS ailleurs (site web, autre téléphone).
-        if ($entry->getId() !== null && $entry->getUpdatedAt() !== null && $entry->getUpdatedAt() > $at) {
+        if (!$isNew && $entry->getUpdatedAt() !== null && $entry->getUpdatedAt() > $at) {
             return $entry;
         }
 
         $finalPassed = $passed ?? ($entry->isPassed() ?? false);
 
-        if (!$finalPassed && !$stopped) {
-            $entry->setPassed(false)->setStopped(false);
-            if ($entry->getId() !== null) {
-                $this->em->remove($entry);
-            }
-
+        // Jamais cochée et toujours « à faire » : rien à retenir.
+        if ($isNew && !$finalPassed && !$stopped) {
             return $entry;
         }
 
-        $now = $at;
-        if ($finalPassed && $entry->getFirstPassedAt() === null) {
-            $entry->setFirstPassedAt($now);
-        }
-        if ($stopped && $entry->getFirstStoppedAt() === null) {
-            $entry->setFirstStoppedAt($now);
-        }
+        $entry->setFirstPassedAt(
+            $this->firstDate($entry->getFirstPassedAt(), (bool) $entry->isPassed(), $finalPassed, $entry->getUpdatedAt(), $at, $isNew),
+        );
+        $entry->setFirstStoppedAt(
+            $this->firstDate($entry->getFirstStoppedAt(), (bool) $entry->isStopped(), $stopped, $entry->getUpdatedAt(), $at, $isNew),
+        );
 
-        $entry->setPassed($finalPassed)->setStopped($stopped)->setUpdatedAt($now);
+        $entry->setPassed($finalPassed)->setStopped($stopped)->setUpdatedAt($at);
         $this->em->persist($entry);
 
         return $entry;
+    }
+
+    /**
+     * Date de « première fois » d'un état (passé ou descendu) après un changement.
+     *
+     * - Coché pour la première fois → l'heure du cochage.
+     * - Recoché plus tard → la date d'origine est conservée.
+     * - Décoché dans les minutes qui suivent la première fois → c'était une fausse manip, la date
+     *   est oubliée (la vraie visite, un autre jour, aura sa vraie date).
+     * - Décoché plus tard → la date reste, au cas où la station serait recochée.
+     */
+    private function firstDate(
+        ?\DateTimeImmutable $first,
+        bool $was,
+        bool $is,
+        ?\DateTimeImmutable $lastChange,
+        \DateTimeImmutable $at,
+        bool $isNew,
+    ): ?\DateTimeImmutable {
+        // Anciennes données cochées sans date : la dernière modification en tient lieu.
+        if ($was && $first === null && !$isNew) {
+            $first = $lastChange;
+        }
+
+        if ($is) {
+            return $first ?? $at;
+        }
+
+        $uncheckedRightAway = $was && $first !== null
+            && $at->getTimestamp() - $first->getTimestamp() < self::MISTAKE_WINDOW_SECONDS;
+
+        return $uncheckedRightAway ? null : $first;
     }
 
     /**
