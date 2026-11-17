@@ -2,6 +2,7 @@
 
 namespace App\Service;
 
+use App\I18n\Translator;
 use App\Content\StationFacts;
 use App\Entity\Bonplan;
 use App\Entity\BonplanFavorite;
@@ -28,6 +29,7 @@ final class BonplanService
         private readonly BonplanFavoriteRepository $favorites,
         private readonly StationRepository $stations,
         private readonly EntityManagerInterface $em,
+        private readonly Translator $translator,
     ) {
     }
 
@@ -88,7 +90,7 @@ final class BonplanService
                 'lng' => $lngs !== [] ? array_sum($lngs) / count($lngs) : null,
                 'lines' => array_values($lines),
                 // « Pourquoi descendre ici ? » (null si la station n'a pas de texte).
-                'fact' => StationFacts::for((string) $station->getName()),
+                'fact' => $this->translator->t(StationFacts::for((string) $station->getName())),
             ],
             'bonplans' => array_map(
                 fn (Bonplan $b) => $this->toArray($b, isset($favSet[$b->getId()])),

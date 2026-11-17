@@ -2,6 +2,7 @@
 
 namespace App\Service;
 
+use App\I18n\Translator;
 use App\Content\GhostStations;
 use App\Content\JourneyCatalog;
 use App\Entity\User;
@@ -16,6 +17,7 @@ final class DiscoveryService
     public function __construct(
         private readonly VisitHistoryService $history,
         private readonly StationRepository $stations,
+        private readonly Translator $translator,
     ) {
     }
 
@@ -30,7 +32,7 @@ final class DiscoveryService
         $ids = $this->stations->representativeIdsByName();
         $lines = $this->stations->linesByStationName();
 
-        return array_map(static function (array $journey) use ($visited, $ids, $lines): array {
+        return array_map(function (array $journey) use ($visited, $ids, $lines): array {
             $stops = [];
             foreach ($journey['stops'] as $name => $note) {
                 // Station inconnue (renommée en base) : on l'ignore plutôt que de casser le parcours.
@@ -40,7 +42,7 @@ final class DiscoveryService
                 $stops[] = [
                     'stationId' => $ids[$name],
                     'name' => $name,
-                    'note' => $note,
+                    'note' => $this->translator->t($note),
                     'lines' => $lines[$name] ?? [],
                     'visited' => isset($visited[$name]),
                 ];
@@ -48,9 +50,9 @@ final class DiscoveryService
 
             return [
                 'key' => $journey['key'],
-                'title' => $journey['title'],
+                'title' => $this->translator->t($journey['title']),
                 'icon' => $journey['icon'],
-                'pitch' => $journey['pitch'],
+                'pitch' => $this->translator->t($journey['pitch']),
                 'visited' => count(array_filter($stops, static fn (array $s) => $s['visited'])),
                 'total' => count($stops),
                 'stops' => $stops,
@@ -68,16 +70,16 @@ final class DiscoveryService
     {
         $visited = $this->history->firstVisits($user);
 
-        return array_map(static function (array $ghost) use ($visited): array {
+        return array_map(function (array $ghost) use ($visited): array {
             $missing = array_values(array_filter($ghost['unlockedBy'], static fn (string $n) => !isset($visited[$n])));
             $unlocked = $missing === [];
 
             return [
                 'key' => $ghost['key'],
                 'name' => $ghost['name'],
-                'lines' => $ghost['lines'],
+                'lines' => $this->translator->t($ghost['lines']),
                 'unlocked' => $unlocked,
-                'story' => $unlocked ? $ghost['story'] : null,
+                'story' => $unlocked ? $this->translator->t($ghost['story']) : null,
                 'unlockedBy' => $ghost['unlockedBy'],
                 'missing' => $missing,
             ];

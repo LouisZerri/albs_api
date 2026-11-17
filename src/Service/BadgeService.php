@@ -2,6 +2,7 @@
 
 namespace App\Service;
 
+use App\I18n\Translator;
 use App\Entity\Badge;
 use App\Entity\User;
 use App\Repository\BadgeRepository;
@@ -50,6 +51,7 @@ final class BadgeService
         private readonly LineRepository $lines,
         private readonly StationRepository $stations,
         private readonly EntityManagerInterface $em,
+        private readonly Translator $translator,
     ) {
     }
 
@@ -61,7 +63,7 @@ final class BadgeService
     public function awardAndDescribe(User $user): array
     {
         return array_map(
-            fn (Badge $b) => ['id' => $b->getId(), 'name' => $b->getName(), 'icon' => $b->getIcon()],
+            fn (Badge $b) => ['id' => $b->getId(), 'name' => $this->translator->t($b->getName()), 'icon' => $b->getIcon()],
             $this->checkAndAwardBadges($user),
         );
     }
@@ -114,10 +116,10 @@ final class BadgeService
             $counter = $isOwned ? null : $this->counter($badge, $ctx);
             $out[] = [
                 'id' => $badge->getId(),
-                'name' => $badge->getName(),
+                'name' => $this->translator->t($badge->getName()),
                 // L'app mobile tutoie (le web vouvoie) → on sert une version « tu »
                 // sans toucher la base partagée. Repli sur la description DB si absente.
-                'description' => self::DESCRIPTIONS_TU[$badge->getName()] ?? $badge->getDescription(),
+                'description' => $this->translator->t(self::DESCRIPTIONS_TU[$badge->getName()] ?? $badge->getDescription()),
                 'icon' => $badge->getIcon(),
                 'type' => $badge->getType(),
                 'earned' => $isOwned,

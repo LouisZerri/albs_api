@@ -2,6 +2,7 @@
 
 namespace App\Service;
 
+use App\I18n\Translator;
 use App\Entity\User;
 
 /**
@@ -16,8 +17,10 @@ final class ChallengeService
     /** On propose de finir une ligne quand il lui reste au plus ce nombre de stations. */
     private const LINE_REMAINING_MAX = 5;
 
-    public function __construct(private readonly VisitHistoryService $history)
-    {
+    public function __construct(
+        private readonly VisitHistoryService $history,
+        private readonly Translator $translator,
+    ) {
     }
 
     /**
@@ -36,14 +39,14 @@ final class ChallengeService
         $challenges = [
             [
                 'key' => 'week',
-                'title' => sprintf('%d nouvelles stations cette semaine', self::WEEKLY_TARGET),
+                'title' => $this->translator->tf('%d nouvelles stations cette semaine', self::WEEKLY_TARGET),
                 'current' => min(self::WEEKLY_TARGET, $since('monday this week')),
                 'target' => self::WEEKLY_TARGET,
                 'lineId' => null,
             ],
             [
                 'key' => 'month',
-                'title' => sprintf('%d nouvelles stations ce mois-ci', self::MONTHLY_TARGET),
+                'title' => $this->translator->tf('%d nouvelles stations ce mois-ci', self::MONTHLY_TARGET),
                 'current' => min(self::MONTHLY_TARGET, $since('first day of this month midnight')),
                 'target' => self::MONTHLY_TARGET,
                 'lineId' => null,
@@ -62,7 +65,7 @@ final class ChallengeService
         if ($closest !== null) {
             $challenges[] = [
                 'key' => 'line',
-                'title' => sprintf('Termine la ligne %s', $closest['number']),
+                'title' => $this->translator->tf('Termine la ligne %s', $closest['number']),
                 'current' => $closest['visited'],
                 'target' => $closest['total'],
                 'lineId' => $closest['id'],

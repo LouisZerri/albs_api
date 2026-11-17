@@ -2,6 +2,7 @@
 
 namespace App\Controller;
 
+use App\I18n\Translator;
 use App\Content\StationFacts;
 use App\Entity\Line;
 use App\Repository\BonplanRepository;
@@ -21,6 +22,7 @@ final class LineController extends AbstractController
         private readonly StationSnapper $snapper,
         private readonly BonplanRepository $bonplans,
         private readonly TrackCleaner $tracks,
+        private readonly Translator $translator,
     ) {
     }
 
@@ -147,7 +149,7 @@ final class LineController extends AbstractController
                 $geometryByLine,
             );
             $stations[$i]['bonplanCount'] = $bonplanCounts[$station['name']] ?? 0;
-            $stations[$i]['fact'] = StationFacts::for($station['name']);
+            $stations[$i]['fact'] = $this->translator->t(StationFacts::for($station['name']));
         }
 
         return $this->json(['lines' => $lines, 'stations' => $stations]);
