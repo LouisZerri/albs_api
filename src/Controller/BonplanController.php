@@ -19,7 +19,16 @@ final class BonplanController extends ApiController
     }
 
     /**
-     * Bons plans approuvés d'une station (+ isFavorite pour l'utilisateur courant).
+     * Stations ayant au moins un bon plan approuvé (+ ligne + nombre) : accueil de l'onglet.
+     */
+    #[Route('/api/bonplans/stations', name: 'api_bonplan_stations', methods: ['GET'])]
+    public function stations(): JsonResponse
+    {
+        return $this->json($this->bonplans->stationsWithBonplans());
+    }
+
+    /**
+     * Écran d'une station : { station, bonplans } (approuvés, + isFavorite pour l'utilisateur courant).
      */
     #[Route('/api/stations/{id}/bonplans', name: 'api_station_bonplans', methods: ['GET'], requirements: ['id' => '\d+'])]
     public function forStation(Station $station, #[CurrentUser] User $user): JsonResponse

@@ -4,7 +4,6 @@ namespace App\Repository;
 
 use App\Entity\Bonplan;
 use App\Entity\BonplanFavorite;
-use App\Entity\Station;
 use App\Entity\User;
 use Doctrine\Bundle\DoctrineBundle\Repository\ServiceEntityRepository;
 use Doctrine\Persistence\ManagerRegistry;
@@ -44,19 +43,21 @@ class BonplanFavoriteRepository extends ServiceEntityRepository
     }
 
     /**
-     * IDs des bonplans favoris de l'utilisateur pour une station donnée.
+     * Ids des bons plans mis en favori par l'utilisateur parmi ceux d'un ensemble de quais.
+     *
+     * @param \App\Entity\Station[] $stations
      *
      * @return int[]
      */
-    public function favoritedBonplanIdsForStation(User $user, Station $station): array
+    public function favoritedBonplanIdsForStations(User $user, array $stations): array
     {
         $rows = $this->createQueryBuilder('f')
             ->select('IDENTITY(f.bonplan) AS bid')
             ->join('f.bonplan', 'b')
             ->andWhere('f.user = :user')
-            ->andWhere('b.station = :station')
+            ->andWhere('b.station IN (:stations)')
             ->setParameter('user', $user)
-            ->setParameter('station', $station)
+            ->setParameter('stations', $stations)
             ->getQuery()
             ->getArrayResult();
 

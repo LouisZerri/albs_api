@@ -32,4 +32,47 @@ class StationRepository extends ServiceEntityRepository
             ->getQuery()
             ->getResult();
     }
+
+    /**
+     * Tous les quais d'une station physique (même nom exact), le quai donné compris.
+     *
+     * @return Station[]
+     */
+    public function findPlatforms(Station $station): array
+    {
+        return $this->createQueryBuilder('s')
+            ->join('s.line', 'l')->addSelect('l')
+            ->andWhere('s.name = :name')
+            ->setParameter('name', $station->getName())
+            ->orderBy('l.id', 'ASC')
+            ->getQuery()
+            ->getResult();
+    }
+
+    /**
+     * Les lignes desservant chaque station, par nom de station (ordre des lignes, sans doublon).
+     *
+     * @return array<string, list<array{lineId: int, number: string, color: string, textColor: ?string}>>
+     */
+    public function linesByStationName(): array
+    {
+        $rows = $this->createQueryBuilder('s')
+            ->select('DISTINCT s.name AS name, l.id AS lineId, l.number AS number, l.color AS color, l.textColor AS textColor')
+            ->join('s.line', 'l')
+            ->orderBy('l.id', 'ASC')
+            ->getQuery()
+            ->getArrayResult();
+
+        $map = [];
+        foreach ($rows as $r) {
+            $map[$r['name']][] = [
+                'lineId' => (int) $r['lineId'],
+                'number' => $r['number'],
+                'color' => $r['color'],
+                'textColor' => $r['textColor'],
+            ];
+        }
+
+        return $map;
+    }
 }
