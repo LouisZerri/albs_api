@@ -12,7 +12,7 @@ namespace App\Content;
 final class StationFacts
 {
     private const FACTS = [
-        'Abbesses' => 'La station la plus profonde du réseau, à 36 mètres sous la butte Montmartre, avec l’un des rares édicules Guimard à verrière encore en place.',
+        'Abbesses' => 'La station la plus profonde du réseau, à 36 mètres sous la butte Montmartre, avec l’un des rares édicules Guimard à verrière encore en place. À la sortie : le Mur des je t’aime.',
         'Anvers' => 'Le point de départ pour monter au Sacré-Cœur, à pied ou par le funiculaire.',
         'Arts et Métiers' => 'Sur les quais de la ligne 11, un décor de sous-marin tout en cuivre, imaginé par le dessinateur François Schuiten en hommage à Jules Verne.',
         'Bastille' => 'Sur le quai de la ligne 1, une fresque raconte la Révolution ; sur celui de la ligne 5, on voit encore des vestiges de la forteresse.',
