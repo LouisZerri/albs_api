@@ -25,9 +25,14 @@ final class TrackCleaner
     private const SAME_TRACK_M = 12.0;
     /** Une station « appartient » à un morceau si elle en est plus proche que du reste d'au moins ça. */
     private const SERVES_MARGIN_M = 25.0;
+    /**
+     * … et si elle est vraiment dessus. Sans cette borne, un pôle dont la coordonnée en base est
+     * loin de tout (centre de Montparnasse, à 330 m de la ligne 4) suffisait à garder un bout de voie.
+     */
+    private const SERVES_MAX_M = 100.0;
     private const METERS_PER_DEGREE = 111320.0;
     /** À incrémenter si l'algorithme ou ses réglages changent (invalide le cache). */
-    private const CACHE_VERSION = 1;
+    private const CACHE_VERSION = 2;
 
     public function __construct(private readonly CacheInterface $cache)
     {
@@ -154,7 +159,8 @@ final class TrackCleaner
     private function servesAStation(array $piece, array $others, array $stations): bool
     {
         foreach ($stations as $station) {
-            if ($this->distance($station, [$piece]) + self::SERVES_MARGIN_M < $this->distance($station, $others)) {
+            $toPiece = $this->distance($station, [$piece]);
+            if ($toPiece <= self::SERVES_MAX_M && $toPiece + self::SERVES_MARGIN_M < $this->distance($station, $others)) {
                 return true;
             }
         }

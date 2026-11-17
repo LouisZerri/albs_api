@@ -85,6 +85,7 @@ final class LineController extends AbstractController
         $linesByName = [];  // nom → [lineId => badge de ligne] (correspondances)
         $platforms = [];    // nom → coordonnées de chaque quai
         $lineIds = [];      // nom → ids des lignes desservant la station
+        $platformOnLine = []; // nom → [lineId => coordonnées du quai de cette ligne]
         $geometryByLine = [];
         $allLines = $this->lines->findAllWithStations();
 
@@ -126,6 +127,7 @@ final class LineController extends AbstractController
                 }
                 $platforms[$name][] = ['lat' => $s->getLatitude(), 'lng' => $s->getLongitude()];
                 $lineIds[$name][$line->getId()] = $line->getId();
+                $platformOnLine[$name][$line->getId()] ??= ['lat' => $s->getLatitude(), 'lng' => $s->getLongitude()];
 
                 if (!isset($index[$name])) {
                     $index[$name] = count($stations);
@@ -139,11 +141,44 @@ final class LineController extends AbstractController
         $positions = $this->snapper->snapAll($platforms, array_map(array_values(...), $lineIds), $geometryByLine);
         foreach ($stations as $i => $station) {
             $stations[$i] += $positions[$station['name']];
-            $stations[$i]['lines'] = array_values($linesByName[$station['name']] ?? []);
+            $stations[$i]['lines'] = $this->linesWithOwnPosition(
+                $linesByName[$station['name']] ?? [],
+                $platformOnLine[$station['name']] ?? [],
+                $geometryByLine,
+            );
             $stations[$i]['bonplanCount'] = $bonplanCounts[$station['name']] ?? 0;
             $stations[$i]['fact'] = StationFacts::for($station['name']);
         }
 
         return $this->json(['lines' => $lines, 'stations' => $stations]);
+    }
+
+    /**
+     * Les lignes d'une station, chacune avec la position de la station SUR CETTE LIGNE (`lat`/`lng`).
+     *
+     * Un pôle n'a qu'un point sur la carte, placé au mieux entre ses lignes : quand elles sont
+     * éloignées (Montparnasse), il ne peut pas être sur toutes. Quand l'app met UNE ligne en avant,
+     * elle utilise cette position-là, pile sur le trait. Inutile pour une station d'une seule ligne
+     * (son point y est déjà) : `lat`/`lng` ne sont alors pas envoyés.
+     *
+     * @param array<int, array<string, mixed>>               $lines       lineId → badge de ligne
+     * @param array<int, array{lat: float, lng: float}>      $platforms   lineId → quai de cette ligne
+     * @param array<int, mixed>                              $geometryByLine
+     *
+     * @return list<array<string, mixed>>
+     */
+    private function linesWithOwnPosition(array $lines, array $platforms, array $geometryByLine): array
+    {
+        if (count($lines) < 2) {
+            return array_values($lines);
+        }
+
+        foreach ($lines as $lineId => $badge) {
+            if (isset($platforms[$lineId])) {
+                $lines[$lineId] = $badge + $this->snapper->snap([$platforms[$lineId]], [$geometryByLine[$lineId] ?? []]);
+            }
+        }
+
+        return array_values($lines);
     }
 }
