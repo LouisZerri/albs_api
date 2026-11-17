@@ -54,7 +54,9 @@ final class VisitHistoryService
     {
         $firstVisit = [];
         foreach ($this->userStations->findByUserWithStations($user) as $us) {
-            $at = $us->getFirstStoppedAt();
+            // Repli sur la dernière modification : une descente enregistrée sans date de première
+            // visite (anciennes données, autre client) doit quand même compter comme visitée.
+            $at = $us->getFirstStoppedAt() ?? $us->getUpdatedAt();
             $name = $us->getStation()?->getName();
             if (!$us->isStopped() || $at === null || $name === null) {
                 continue;
