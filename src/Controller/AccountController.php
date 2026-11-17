@@ -3,6 +3,7 @@
 namespace App\Controller;
 
 use App\Entity\User;
+use App\Exception\FieldException;
 use App\Repository\BadgeRepository;
 use App\Repository\LineRepository;
 use App\Repository\UserRepository;
@@ -44,11 +45,11 @@ final class AccountController extends ApiController
             $username = trim((string) $data['username']);
             $len = mb_strlen($username);
             if ($len < 3 || $len > 30) {
-                throw new BadRequestHttpException('Le pseudo doit faire entre 3 et 30 caractères.');
+                throw new FieldException('username', 'Le pseudo doit faire entre 3 et 30 caractères.');
             }
             $existing = $users->findOneBy(['username' => $username]);
             if ($existing !== null && $existing->getId() !== $user->getId()) {
-                throw new BadRequestHttpException('Ce pseudo est déjà utilisé.');
+                throw new FieldException('username', 'Ce pseudo est déjà utilisé.');
             }
             $user->setUsername($username);
         }
@@ -57,11 +58,11 @@ final class AccountController extends ApiController
         if (isset($data['email'])) {
             $email = trim((string) $data['email']);
             if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
-                throw new BadRequestHttpException('Email invalide.');
+                throw new FieldException('email', 'Email invalide.');
             }
             $existing = $users->findOneBy(['email' => $email]);
             if ($existing !== null && $existing->getId() !== $user->getId()) {
-                throw new BadRequestHttpException('Cet email est déjà utilisé.');
+                throw new FieldException('email', 'Cet email est déjà utilisé.');
             }
             // Un changement d'email repasse le compte en non-vérifié (ré-incitation).
             if ($email !== $user->getEmail()) {
@@ -73,11 +74,11 @@ final class AccountController extends ApiController
         if (!empty($data['newPassword'])) {
             $current = (string) ($data['currentPassword'] ?? '');
             if (!$hasher->isPasswordValid($user, $current)) {
-                throw new BadRequestHttpException('Mot de passe actuel incorrect.');
+                throw new FieldException('currentPassword', 'Mot de passe actuel incorrect.');
             }
             $new = (string) $data['newPassword'];
             if (mb_strlen($new) < 8) {
-                throw new BadRequestHttpException('Le nouveau mot de passe doit faire au moins 8 caractères.');
+                throw new FieldException('newPassword', 'Le nouveau mot de passe doit faire au moins 8 caractères.');
             }
             $user->setPassword($hasher->hashPassword($user, $new));
         }

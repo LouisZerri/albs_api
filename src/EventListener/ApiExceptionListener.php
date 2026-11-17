@@ -2,6 +2,7 @@
 
 namespace App\EventListener;
 
+use App\Exception\FieldException;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
 use Symfony\Component\EventDispatcher\Attribute\AsEventListener;
 use Symfony\Component\HttpFoundation\JsonResponse;
@@ -71,6 +72,11 @@ final class ApiExceptionListener
         // En-têtes portés par l'exception (ex. Retry-After d'un 429).
         $headers = $throwable instanceof HttpExceptionInterface ? $throwable->getHeaders() : [];
 
-        $event->setResponse(new JsonResponse(['message' => $message, 'status' => $status], $status, $headers));
+        $body = ['message' => $message, 'status' => $status];
+        if ($throwable instanceof FieldException) {
+            $body['field'] = $throwable->field; // l'app place l'erreur sous ce champ
+        }
+
+        $event->setResponse(new JsonResponse($body, $status, $headers));
     }
 }
