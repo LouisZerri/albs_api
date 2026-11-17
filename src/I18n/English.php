@@ -158,6 +158,21 @@ final class English
         'Tu es passé par 20 stations de la même ligne.' => 'You passed through 20 stations on the same line.',
         'Bienvenue ! Tu viens de créer ton compte.' => 'Welcome! You have just created your account.',
 
+        // ── E-mails (templates/emails/, AccountMailer) ─────────────────────────────────────────
+        'Confirme ton adresse email' => 'Confirm your email address',
+        'Ton code de réinitialisation' => 'Your reset code',
+        'Bienvenue, %s !' => 'Welcome, %s!',
+        'Bienvenue sur À la bonne station, %s !' => 'Welcome to À la bonne station, %s!',
+        'Plus qu\'une étape : saisis ce code dans l\'application pour confirmer ton adresse et activer ton compte.' => 'One last step: enter this code in the app to confirm your address and activate your account.',
+        'Saisis ce code dans l\'application pour confirmer ton adresse :' => 'Enter this code in the app to confirm your address:',
+        'Ce code expire dans 24 heures.' => 'This code expires in 24 hours.',
+        'Réinitialisation du mot de passe' => 'Password reset',
+        'Voici ton code de vérification. Saisis-le dans l\'application pour choisir un nouveau mot de passe.' => 'Here is your verification code. Enter it in the app to choose a new password.',
+        'Tu as demandé à réinitialiser ton mot de passe.' => 'You asked to reset your password.',
+        'Ton code : %s' => 'Your code: %s',
+        'Saisis-le dans l\'application pour choisir un nouveau mot de passe.' => 'Enter it in the app to choose a new password.',
+        'Ce code expire dans 15 minutes. Si tu n\'es pas à l\'origine de cette demande, ignore cet email.' => 'This code expires in 15 minutes. If you did not request this, ignore this email.',
+
         // ── Messages renvoyés à l'app (erreurs et confirmations) ───────────────────────────────
         'Une erreur est survenue.' => 'Something went wrong.',
         'Ressource introuvable.' => 'Not found.',

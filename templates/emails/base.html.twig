@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="fr">
+<html lang="{{ app.request ? app.request.preferredLanguage(['fr', 'en']) : 'fr' }}">
 <body style="margin:0;padding:0;background:#F4F6F8;">
   <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#F4F6F8;padding:24px 12px;">
     <tr>

@@ -3,12 +3,14 @@
 namespace App\Service;
 
 use App\Entity\User;
+use App\I18n\Translator;
 use Symfony\Bridge\Twig\Mime\TemplatedEmail;
 use Symfony\Component\Mailer\MailerInterface;
 
 /**
  * Emails transactionnels du compte (vérification, réinitialisation de mot de passe).
- * Rendu via les templates Twig de templates/emails/ (HTML + fallback texte).
+ * Rendu via les templates Twig de templates/emails/ (HTML + fallback texte), dans la langue de
+ * l'app qui a déclenché l'envoi (objet et corps : Translator, filtre Twig `|t`).
  */
 final class AccountMailer
 {
@@ -16,6 +18,7 @@ final class AccountMailer
 
     public function __construct(
         private readonly MailerInterface $mailer,
+        private readonly Translator $translator,
     ) {
     }
 
@@ -44,7 +47,7 @@ final class AccountMailer
         return (new TemplatedEmail())
             ->from(self::FROM)
             ->to($to)
-            ->subject($subject)
+            ->subject((string) $this->translator->t($subject))
             ->htmlTemplate("emails/{$template}.html.twig")
             ->textTemplate("emails/{$template}.txt.twig");
     }
