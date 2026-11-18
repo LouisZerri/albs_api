@@ -49,6 +49,15 @@ class StationRepository extends ServiceEntityRepository
             ->getResult();
     }
 
+    /** Nombre de stations réelles : plusieurs quais de même nom (correspondances) = une station. */
+    public function countPhysical(): int
+    {
+        return (int) $this->createQueryBuilder('s')
+            ->select('COUNT(DISTINCT s.name)')
+            ->getQuery()
+            ->getSingleScalarResult();
+    }
+
     /**
      * Les lignes desservant chaque station, par nom de station (ordre des lignes, sans doublon).
      *

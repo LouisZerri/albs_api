@@ -142,8 +142,9 @@ final class BadgeService
     {
         $byStationId = [];
         $totalPassed = 0;
-        $totalStopped = 0;
-        $stationsByDay = [];
+        // « Descendu » se compte par STATION RÉELLE (nom), comme dans le profil : Châtelet vaut une
+        // station, pas ses cinq quais. nom => date de la première descente (null si inconnue).
+        $firstVisitByName = [];
         $hasNight = false;
         $hasEarly = false;
 
@@ -152,12 +153,13 @@ final class BadgeService
             if ($us->isPassed()) {
                 $totalPassed++;
             }
-            if ($us->isStopped()) {
-                $totalStopped++;
-            }
-
             // Seulement si la station est encore cochée : une station décochée garde sa date en base.
             $stoppedAt = $us->isStopped() ? $us->getFirstStoppedAt() : null;
+            if ($us->isStopped()) {
+                $name = (string) $us->getStation()->getName();
+                $known = $firstVisitByName[$name] ?? null;
+                $firstVisitByName[$name] = $stoppedAt !== null && ($known === null || $stoppedAt < $known) ? $stoppedAt : $known;
+            }
             if ($stoppedAt !== null) {
                 $hour = (int) $stoppedAt->format('H');
                 if (($hour >= 22 && $hour <= 23) || ($hour >= 0 && $hour <= 5)) {
@@ -166,9 +168,14 @@ final class BadgeService
                 if ($hour >= 6 && $hour <= 8) {
                     $hasEarly = true;
                 }
-                $day = $stoppedAt->format('Y-m-d');
-                $stationsByDay[$day] = ($stationsByDay[$day] ?? 0) + 1;
             }
+        }
+
+        // Stations réelles découvertes par jour (une station à plusieurs quais ne compte qu'une fois).
+        $stationsByDay = [];
+        foreach (array_filter($firstVisitByName) as $firstVisit) {
+            $day = $firstVisit->format('Y-m-d');
+            $stationsByDay[$day] = ($stationsByDay[$day] ?? 0) + 1;
         }
 
         $completedLines = 0;
@@ -197,8 +204,8 @@ final class BadgeService
 
         return [
             'totalPassed' => $totalPassed,
-            'totalStopped' => $totalStopped,
-            'totalStations' => $this->stations->count([]),
+            'totalStopped' => count($firstVisitByName),
+            'totalStations' => $this->stations->countPhysical(),
             'completedLines' => $completedLines,
             'maxPassedOnLine' => $maxPassedOnLine,
             'maxInOneDay' => $stationsByDay !== [] ? max($stationsByDay) : 0,
