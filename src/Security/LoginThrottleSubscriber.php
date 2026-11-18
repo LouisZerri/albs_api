@@ -45,6 +45,11 @@ final class LoginThrottleSubscriber implements EventSubscriberInterface
 
     public function onFailure(LoginFailureEvent $event): void
     {
+        // Bon mot de passe mais adresse non confirmée : ce n'est pas un essai de mot de passe raté.
+        if ($event->getException() instanceof EmailNotVerifiedException) {
+            return;
+        }
+
         $email = $this->emailOf($event->getRequest());
         if ($event->getFirewallName() === self::FIREWALL && $email !== null) {
             $this->limiter->recordFailure(self::SCOPE, $email, self::WINDOW_SECONDS);

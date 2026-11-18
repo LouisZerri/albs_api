@@ -183,6 +183,8 @@ final class English
         'Authentification requise.' => 'Please sign in.',
         'Ce compte a été banni.' => 'This account has been banned.',
         'Ce compte a été supprimé.' => 'This account has been deleted.',
+        'Confirme ton adresse email avant de te connecter.' => 'Confirm your email address before signing in.',
+        'Si un compte attend sa confirmation, un nouveau code vient d\'être envoyé.' => 'If an account is awaiting confirmation, a new code has just been sent.',
         'Code invalide ou expiré.' => 'Invalid or expired code.',
         'Adresse email vérifiée.' => 'Email address verified.',
         'Adresse déjà vérifiée.' => 'Address already verified.',

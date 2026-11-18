@@ -22,6 +22,8 @@ final class AuthController extends ApiController
     private const MAX_CODE_FAILURES = 5;
     /** Durée du blocage : celle de la validité d'un code de réinitialisation. */
     private const CODE_WINDOW_SECONDS = 900;
+    /** Nouveaux codes de vérification demandés sans être connecté, par adresse et par fenêtre. */
+    private const MAX_RESENDS = 3;
 
     /**
      * Vérifie l'adresse email à partir du code reçu par mail. Body : { email, code }.
@@ -46,6 +48,38 @@ final class AuthController extends ApiController
         $limiter->clear('verify-email', $email);
 
         return $this->json(['message' => 'Adresse email vérifiée.']);
+    }
+
+    /**
+     * Renvoie un code de vérification, sans être connecté (la connexion est refusée tant que
+     * l'adresse n'est pas confirmée). Body : { email }. Réponse neutre, envois limités par adresse.
+     */
+    #[Route('/api/resend-verification', name: 'api_resend_verification', methods: ['POST'])]
+    public function resendVerification(Request $request, UserRepository $users, AccountMailer $mailer, EntityManagerInterface $em, AttemptLimiter $limiter, LoggerInterface $logger): JsonResponse
+    {
+        $email = trim((string) ($this->payload($request)['email'] ?? ''));
+
+        if ($email !== '') {
+            // Chaque demande compte, que le compte existe ou non : la réponse ne révèle rien.
+            if ($limiter->isBlocked('resend-verification', $email, self::MAX_RESENDS)) {
+                throw new TooManyRequestsHttpException(self::CODE_WINDOW_SECONDS, AttemptLimiter::MESSAGE);
+            }
+            $limiter->recordFailure('resend-verification', $email, self::CODE_WINDOW_SECONDS);
+
+            $user = $users->findOneBy(['email' => $email]);
+            if ($user !== null && !$user->isDeleted() && !$user->isBanned() && !$user->isEmailVerified()) {
+                $user->generateEmailVerificationToken();
+                $em->flush();
+                $limiter->clear('verify-email', $email);
+                try {
+                    $mailer->sendVerification($user);
+                } catch (\Throwable $e) {
+                    $logger->error('Envoi email de vérification échoué : ' . $e->getMessage());
+                }
+            }
+        }
+
+        return $this->json(['message' => 'Si un compte attend sa confirmation, un nouveau code vient d\'être envoyé.']);
     }
 
     /**

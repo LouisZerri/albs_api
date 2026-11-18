@@ -18,7 +18,8 @@ security:
         login:
             pattern: ^/api/login$
             stateless: true
-            user_checker: App\Security\AccountStatusChecker
+            # Banni, supprimé, et adresse e-mail confirmée (exigée ici seulement).
+            user_checker: App\Security\LoginUserChecker
             json_login:
                 check_path: /api/login
                 username_path: email
@@ -51,6 +52,7 @@ security:
         - { path: ^/api/token/refresh, roles: PUBLIC_ACCESS }
         - { path: ^/api/register, roles: PUBLIC_ACCESS }
         - { path: ^/api/verify-email, roles: PUBLIC_ACCESS }
+        - { path: ^/api/resend-verification, roles: PUBLIC_ACCESS }
         - { path: ^/api/forgot-password, roles: PUBLIC_ACCESS }
         - { path: ^/api/reset-password, roles: PUBLIC_ACCESS }
         - { path: ^/api/(docs|contexts|\.well-known|$), roles: PUBLIC_ACCESS }
