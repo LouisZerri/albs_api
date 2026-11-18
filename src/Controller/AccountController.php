@@ -2,7 +2,10 @@
 
 namespace App\Controller;
 
+use App\Entity\BonplanFavorite;
+use App\Entity\RefreshToken;
 use App\Entity\User;
+use App\Entity\UserStation;
 use App\Exception\FieldException;
 use App\Repository\BadgeRepository;
 use App\Repository\LineRepository;
@@ -219,6 +222,10 @@ final class AccountController extends ApiController
      * Suppression de compte (RGPD) par ANONYMISATION : on efface les données personnelles
      * mais on conserve le contenu communautaire (posts forum, bons plans) attribué à un
      * compte « supprimé ». Le statut `deleted` invalide de fait le JWT (AccountStatusChecker).
+     *
+     * Tout ce qui est PRIVÉ disparaît aussi (progression, favoris, badges, sessions) : ces données
+     * n'ont plus aucun usage une fois le compte fermé. Les sessions sont rangées sous l'adresse
+     * e-mail : les laisser garderait cette adresse en base.
      */
     #[Route('/api/me', name: 'api_me_delete', methods: ['DELETE'])]
     public function delete(#[CurrentUser] User $user, EntityManagerInterface $em): JsonResponse
@@ -226,12 +233,22 @@ final class AccountController extends ApiController
         $id = $user->getId();
         $this->deleteAvatarFile($user->getAvatarUrl());
 
+        // Avant d'anonymiser : les sessions sont identifiées par l'e-mail encore en place.
+        $em->createQuery('DELETE FROM '.RefreshToken::class.' t WHERE t.username = :email')
+            ->execute(['email' => $user->getEmail()]);
+        $em->createQuery('DELETE FROM '.UserStation::class.' us WHERE us.user = :user')->execute(['user' => $user]);
+        $em->createQuery('DELETE FROM '.BonplanFavorite::class.' f WHERE f.user = :user')->execute(['user' => $user]);
+        foreach ($user->getBadges()->toArray() as $badge) {
+            $user->removeBadge($badge);
+        }
+
         $user
             ->setEmail('deleted-' . $id . '@albs.local')
             ->setUsername('Compte supprimé #' . $id)
             ->setPassword(bin2hex(random_bytes(16))) // hash invalide → connexion impossible
             ->setAvatarUrl(null)
             ->setFavoriteLine(null)
+            ->setDisplayedBadges([])
             ->setAccountStatus('deleted')
             ->setIsEmailVerified(false)
             ->setEmailVerificationToken(null)
