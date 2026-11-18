@@ -2,37 +2,48 @@
 
 namespace App\Controller;
 
+use App\Entity\RefreshToken;
 use App\Entity\User;
 use App\Repository\UserRepository;
 use App\Service\AccountMailer;
+use App\Service\AttemptLimiter;
 use Doctrine\ORM\EntityManagerInterface;
 use Psr\Log\LoggerInterface;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpKernel\Exception\AccessDeniedHttpException;
 use Symfony\Component\HttpKernel\Exception\BadRequestHttpException;
+use Symfony\Component\HttpKernel\Exception\TooManyRequestsHttpException;
 use Symfony\Component\PasswordHasher\Hasher\UserPasswordHasherInterface;
 use Symfony\Component\Routing\Attribute\Route;
 
 final class AuthController extends ApiController
 {
+    private const MAX_CODE_FAILURES = 5;
+    /** Durée du blocage : celle de la validité d'un code de réinitialisation. */
+    private const CODE_WINDOW_SECONDS = 900;
+
     /**
      * Vérifie l'adresse email à partir du code reçu par mail. Body : { email, code }.
      */
     #[Route('/api/verify-email', name: 'api_verify_email', methods: ['POST'])]
-    public function verifyEmail(Request $request, UserRepository $users, EntityManagerInterface $em): JsonResponse
+    public function verifyEmail(Request $request, UserRepository $users, EntityManagerInterface $em, AttemptLimiter $limiter): JsonResponse
     {
         $data = $this->payload($request);
         $email = trim($this->requireString($data, 'email'));
         $code = trim($this->requireString($data, 'code'));
 
+        $this->denyIfTooManyAttempts($limiter, 'verify-email', $email);
+
         $user = $users->findOneBy(['email' => $email]);
         if ($user === null || !$user->isEmailVerificationTokenValid() || !hash_equals((string) $user->getEmailVerificationToken(), $code)) {
+            $limiter->recordFailure('verify-email', $email, self::CODE_WINDOW_SECONDS);
             throw new BadRequestHttpException('Code invalide ou expiré.');
         }
 
         $user->verifyEmail();
         $em->flush();
+        $limiter->clear('verify-email', $email);
 
         return $this->json(['message' => 'Adresse email vérifiée.']);
     }
@@ -66,7 +77,7 @@ final class AuthController extends ApiController
      * Vérification par email + code (le code court est scoppé à l'utilisateur).
      */
     #[Route('/api/reset-password', name: 'api_reset_password', methods: ['POST'])]
-    public function resetPassword(Request $request, UserRepository $users, EntityManagerInterface $em, UserPasswordHasherInterface $hasher): JsonResponse
+    public function resetPassword(Request $request, UserRepository $users, EntityManagerInterface $em, UserPasswordHasherInterface $hasher, AttemptLimiter $limiter): JsonResponse
     {
         $data = $this->payload($request);
         $email = trim($this->requireString($data, 'email'));
@@ -77,13 +88,20 @@ final class AuthController extends ApiController
             throw new BadRequestHttpException('Le mot de passe doit faire au moins 8 caractères.');
         }
 
+        $this->denyIfTooManyAttempts($limiter, 'reset-password', $email);
+
         $user = $users->findOneBy(['email' => $email]);
         if ($user === null || !$user->isPasswordResetTokenValid() || !hash_equals((string) $user->getPasswordResetToken(), $code)) {
+            $limiter->recordFailure('reset-password', $email, self::CODE_WINDOW_SECONDS);
             throw new BadRequestHttpException('Code invalide ou expiré.');
         }
 
         $user->resetPassword($hasher->hashPassword($user, $password));
+        // Mot de passe oublié = on ne sait pas qui a les sessions ouvertes : on les ferme toutes.
+        $em->createQuery('DELETE FROM '.RefreshToken::class.' t WHERE t.username = :email')->execute(['email' => $user->getEmail()]);
         $em->flush();
+        $limiter->clear('reset-password', $email);
+        $limiter->clear('login', $email);
 
         return $this->json(['message' => 'Mot de passe réinitialisé.']);
     }
@@ -103,5 +121,16 @@ final class AuthController extends ApiController
         $em->flush();
 
         return $this->json($user, context: ['groups' => ['user:read']]);
+    }
+
+    /**
+     * Un code à 6 chiffres se devine par essais successifs : au-delà de quelques échecs pour une
+     * même adresse, on refuse (429) jusqu'à la fin de la fenêtre, même avec le bon code.
+     */
+    private function denyIfTooManyAttempts(AttemptLimiter $limiter, string $scope, string $email): void
+    {
+        if ($limiter->isBlocked($scope, $email, self::MAX_CODE_FAILURES)) {
+            throw new TooManyRequestsHttpException(self::CODE_WINDOW_SECONDS, AttemptLimiter::MESSAGE);
+        }
     }
 }

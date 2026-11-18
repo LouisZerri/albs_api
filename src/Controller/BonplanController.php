@@ -66,6 +66,10 @@ final class BonplanController extends ApiController
     #[Route('/api/bonplans/{id}/favorite', name: 'api_bonplan_favorite_add', methods: ['POST'], requirements: ['id' => '\d+'])]
     public function addFavorite(Bonplan $bonplan, #[CurrentUser] User $user): JsonResponse
     {
+        // Un bon plan en attente ou refusé n'existe pour personne, même si l'on devine son numéro.
+        if ($bonplan->getStatus() !== Bonplan::STATUS_APPROVED) {
+            throw $this->createNotFoundException();
+        }
         $this->bonplans->addFavorite($user, $bonplan);
 
         return $this->json(['favorite' => true]);

@@ -215,6 +215,7 @@ final class English
         'La description ne peut pas dépasser %d caractères.' => 'The description cannot exceed %d characters.',
         'Cette discussion est verrouillée.' => 'This discussion is locked.',
         'Discussion supprimée.' => 'Discussion deleted.',
+        'Trop d\'essais. Réessaie dans quelques minutes.' => 'Too many attempts. Try again in a few minutes.',
         'Trop de cochages d\'un coup. Réessaie dans un instant.' => 'Too many changes at once. Try again in a moment.',
     ];
 }

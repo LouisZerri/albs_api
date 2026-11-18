@@ -30,6 +30,9 @@ security:
         refresh:
             pattern: ^/api/token/refresh
             stateless: true
+            provider: app_user_provider
+            # Un compte banni ou supprimé ne peut pas prolonger sa session.
+            user_checker: App\Security\AccountStatusChecker
             refresh_jwt:
                 check_path: /api/token/refresh
 

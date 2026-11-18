@@ -69,6 +69,10 @@ final class AccountController extends ApiController
             }
             // Un changement d'email repasse le compte en non-vérifié (ré-incitation).
             if ($email !== $user->getEmail()) {
+                // Les sessions sont rangées sous l'adresse e-mail : elles suivent la nouvelle, sinon
+                // l'app ne pourrait plus renouveler la sienne et l'utilisateur serait déconnecté.
+                $em->createQuery('UPDATE '.RefreshToken::class.' t SET t.username = :new WHERE t.username = :old')
+                    ->execute(['new' => $email, 'old' => $user->getEmail()]);
                 $user->setEmail($email)->setIsEmailVerified(false);
             }
         }
