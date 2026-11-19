@@ -11,6 +11,10 @@ use App\Repository\BadgeRepository;
 use App\Repository\LineRepository;
 use App\Repository\UserRepository;
 use App\Service\AccountMailer;
+use App\Service\AttemptLimiter;
+use App\Validator\UsernamePolicy;
+use Psr\Log\LoggerInterface;
+use Symfony\Component\HttpKernel\Exception\TooManyRequestsHttpException;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Component\HttpFoundation\File\Exception\FileException;
 use Symfony\Component\HttpFoundation\File\UploadedFile;
@@ -26,6 +30,11 @@ final class AccountController extends ApiController
 {
     private const AVATAR_DIR = 'uploads/avatars';
     private const MAX_AVATAR_BYTES = 5 * 1024 * 1024; // 5 Mo
+    /** Formats d'avatar acceptés (pas de SVG : il peut contenir du script). */
+    private const AVATAR_EXTENSIONS = ['jpg', 'jpeg', 'png', 'gif', 'webp'];
+    /** Codes de vérification redemandés depuis le profil, par compte et par quart d'heure. */
+    private const MAX_RESENDS = 3;
+    private const RESEND_WINDOW_SECONDS = 900;
 
     /**
      * Édition du profil courant : pseudo, email, et/ou mot de passe.
@@ -40,15 +49,19 @@ final class AccountController extends ApiController
         LineRepository $lines,
         UserPasswordHasherInterface $hasher,
         EntityManagerInterface $em,
+        AccountMailer $mailer,
+        LoggerInterface $logger,
     ): JsonResponse {
         $data = $this->payload($request);
+        $emailChanged = false;
 
         // --- Pseudo ---
         if (isset($data['username'])) {
             $username = trim((string) $data['username']);
-            $len = mb_strlen($username);
-            if ($len < 3 || $len > 30) {
-                throw new FieldException('username', 'Le pseudo doit faire entre 3 et 30 caractères.');
+            // La règle ne vaut que pour un NOUVEAU pseudo : un ancien pseudo reste valable.
+            $error = $username !== $user->getUsername() ? UsernamePolicy::error($username) : null;
+            if ($error !== null) {
+                throw new FieldException('username', $error);
             }
             $existing = $users->findOneBy(['username' => $username]);
             if ($existing !== null && $existing->getId() !== $user->getId()) {
@@ -69,11 +82,18 @@ final class AccountController extends ApiController
             }
             // Un changement d'email repasse le compte en non-vérifié (ré-incitation).
             if ($email !== $user->getEmail()) {
+                // L'adresse est la clé du compte (c'est elle qui reçoit « mot de passe oublié ») :
+                // la changer demande le mot de passe, sinon une session volée suffirait à prendre le compte.
+                if (!$hasher->isPasswordValid($user, (string) ($data['currentPassword'] ?? ''))) {
+                    throw new FieldException('currentPassword', 'Mot de passe actuel incorrect.');
+                }
                 // Les sessions sont rangées sous l'adresse e-mail : elles suivent la nouvelle, sinon
                 // l'app ne pourrait plus renouveler la sienne et l'utilisateur serait déconnecté.
                 $em->createQuery('UPDATE '.RefreshToken::class.' t SET t.username = :new WHERE t.username = :old')
                     ->execute(['new' => $email, 'old' => $user->getEmail()]);
                 $user->setEmail($email)->setIsEmailVerified(false);
+                $user->generateEmailVerificationToken();
+                $emailChanged = true;
             }
         }
 
@@ -105,6 +125,15 @@ final class AccountController extends ApiController
         }
 
         $em->flush();
+
+        // Le code part vers la NOUVELLE adresse : la prochaine connexion l'exigera.
+        if ($emailChanged) {
+            try {
+                $mailer->sendVerification($user);
+            } catch (\Throwable $e) {
+                $logger->error('Envoi email de vérification échoué : ' . $e->getMessage());
+            }
+        }
 
         return $this->json($user, 200, [], ['groups' => ['user:read']]);
     }
@@ -155,10 +184,17 @@ final class AccountController extends ApiController
         #[CurrentUser] User $user,
         AccountMailer $mailer,
         EntityManagerInterface $em,
+        AttemptLimiter $limiter,
     ): JsonResponse {
         if ($user->isEmailVerified()) {
             return $this->json(['message' => 'Adresse déjà vérifiée.']);
         }
+        // Même compteur que le renvoi sans connexion : c'est la même boîte aux lettres qui reçoit.
+        $email = (string) $user->getEmail();
+        if ($limiter->isBlocked('resend-verification', $email, self::MAX_RESENDS)) {
+            throw new TooManyRequestsHttpException(self::RESEND_WINDOW_SECONDS, AttemptLimiter::MESSAGE);
+        }
+        $limiter->recordFailure('resend-verification', $email, self::RESEND_WINDOW_SECONDS);
 
         $user->generateEmailVerificationToken();
         $em->flush();
@@ -184,8 +220,10 @@ final class AccountController extends ApiController
         if ($file->getSize() > self::MAX_AVATAR_BYTES) {
             throw new BadRequestHttpException('Image trop lourde (max 5 Mo).');
         }
-        if (!str_starts_with((string) $file->getMimeType(), 'image/')) {
-            throw new BadRequestHttpException('Le fichier doit être une image.');
+        // Format déduit du CONTENU du fichier, pas du nom envoyé.
+        $extension = strtolower((string) $file->guessExtension());
+        if (!in_array($extension, self::AVATAR_EXTENSIONS, true)) {
+            throw new BadRequestHttpException('Le fichier doit être une image (JPG, PNG, GIF ou WebP).');
         }
 
         $dir = $this->getParameter('kernel.project_dir') . '/public/' . self::AVATAR_DIR;
@@ -194,7 +232,7 @@ final class AccountController extends ApiController
         }
 
         $safe = $slugger->slug(pathinfo($file->getClientOriginalName(), PATHINFO_FILENAME));
-        $filename = $safe . '-' . uniqid() . '.' . ($file->guessExtension() ?: 'jpg');
+        $filename = $safe . '-' . uniqid() . '.' . $extension;
 
         try {
             $file->move($dir, $filename);

@@ -68,7 +68,6 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
 
     #[ORM\Column(length: 100, unique: true)]
     #[Assert\NotBlank]
-    #[Assert\Length(min: 3, max: 30)]
     #[Groups(['user:read', 'user:create'])]
     private ?string $username = null;
 
@@ -633,5 +632,15 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
         $this->email = $data['email'];
         $this->password = $data['password'];
         $this->roles = $data['roles'];
+    }
+
+    /** Règle des pseudos à l'inscription (la même que sur le site) : voir UsernamePolicy. */
+    #[Assert\Callback(groups: ['user:create'])]
+    public function validateUsername(\Symfony\Component\Validator\Context\ExecutionContextInterface $context): void
+    {
+        $error = \App\Validator\UsernamePolicy::error((string) $this->username);
+        if ($this->username !== null && $this->username !== '' && $error !== null) {
+            $context->buildViolation($error)->atPath('username')->addViolation();
+        }
     }
 }

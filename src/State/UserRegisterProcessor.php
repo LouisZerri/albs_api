@@ -5,10 +5,13 @@ namespace App\State;
 use ApiPlatform\Metadata\Operation;
 use ApiPlatform\State\ProcessorInterface;
 use App\Entity\User;
+use App\EventListener\RegisterThrottleListener;
 use App\Service\AccountMailer;
+use App\Service\AttemptLimiter;
 use App\Service\BadgeService;
 use Psr\Log\LoggerInterface;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
+use Symfony\Component\HttpFoundation\RequestStack;
 use Symfony\Component\PasswordHasher\Hasher\UserPasswordHasherInterface;
 
 /**
@@ -28,6 +31,8 @@ final class UserRegisterProcessor implements ProcessorInterface
         private readonly BadgeService $badges,
         private readonly AccountMailer $mailer,
         private readonly LoggerInterface $logger,
+        private readonly AttemptLimiter $limiter,
+        private readonly RequestStack $requests,
     ) {
     }
 
@@ -45,6 +50,12 @@ final class UserRegisterProcessor implements ProcessorInterface
 
         if ($result instanceof User) {
             $this->badges->checkAndAwardBadges($result);
+            // Compte pour le plafond de créations par adresse IP (RegisterThrottleListener).
+            $this->limiter->recordFailure(
+                RegisterThrottleListener::SCOPE,
+                (string) $this->requests->getMainRequest()?->getClientIp(),
+                RegisterThrottleListener::WINDOW_SECONDS,
+            );
 
             try {
                 $this->mailer->sendVerification($result);

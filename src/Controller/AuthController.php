@@ -5,8 +5,10 @@ namespace App\Controller;
 use App\Entity\RefreshToken;
 use App\Entity\User;
 use App\Repository\UserRepository;
+use App\Security\LoginThrottleSubscriber;
 use App\Service\AccountMailer;
 use App\Service\AttemptLimiter;
+use App\Service\SessionRevoker;
 use Doctrine\ORM\EntityManagerInterface;
 use Psr\Log\LoggerInterface;
 use Symfony\Component\HttpFoundation\JsonResponse;
@@ -86,11 +88,18 @@ final class AuthController extends ApiController
      * Demande de réinitialisation. Body : { email }. Réponse volontairement neutre (pas de fuite).
      */
     #[Route('/api/forgot-password', name: 'api_forgot_password', methods: ['POST'])]
-    public function forgotPassword(Request $request, UserRepository $users, AccountMailer $mailer, EntityManagerInterface $em, LoggerInterface $logger): JsonResponse
+    public function forgotPassword(Request $request, UserRepository $users, AccountMailer $mailer, EntityManagerInterface $em, LoggerInterface $logger, AttemptLimiter $limiter): JsonResponse
     {
         $email = trim((string) ($this->payload($request)['email'] ?? ''));
 
         if ($email !== '') {
+            // Chaque demande remplace le code précédent et envoie un e-mail : sans plafond, on pourrait
+            // inonder une boîte ou empêcher quelqu'un de réinitialiser. Compté que le compte existe ou non.
+            if ($limiter->isBlocked('forgot-password', $email, self::MAX_RESENDS)) {
+                throw new TooManyRequestsHttpException(self::CODE_WINDOW_SECONDS, AttemptLimiter::MESSAGE);
+            }
+            $limiter->recordFailure('forgot-password', $email, self::CODE_WINDOW_SECONDS);
+
             $user = $users->findOneBy(['email' => $email]);
             if ($user !== null && !$user->isDeleted()) {
                 $user->generatePasswordResetToken();
@@ -111,7 +120,7 @@ final class AuthController extends ApiController
      * Vérification par email + code (le code court est scoppé à l'utilisateur).
      */
     #[Route('/api/reset-password', name: 'api_reset_password', methods: ['POST'])]
-    public function resetPassword(Request $request, UserRepository $users, EntityManagerInterface $em, UserPasswordHasherInterface $hasher, AttemptLimiter $limiter): JsonResponse
+    public function resetPassword(Request $request, UserRepository $users, EntityManagerInterface $em, UserPasswordHasherInterface $hasher, AttemptLimiter $limiter, SessionRevoker $sessions): JsonResponse
     {
         $data = $this->payload($request);
         $email = trim($this->requireString($data, 'email'));
@@ -134,8 +143,12 @@ final class AuthController extends ApiController
         // Mot de passe oublié = on ne sait pas qui a les sessions ouvertes : on les ferme toutes.
         $em->createQuery('DELETE FROM '.RefreshToken::class.' t WHERE t.username = :email')->execute(['email' => $user->getEmail()]);
         $em->flush();
+        // … et les jetons d'accès déjà délivrés (valables 1 h) cessent de l'être tout de suite.
+        $sessions->revokeAll((string) $user->getEmail());
         $limiter->clear('reset-password', $email);
-        $limiter->clear('login', $email);
+        $limiter->clear('forgot-password', $email);
+        $limiter->clear(LoginThrottleSubscriber::SCOPE_ACCOUNT, $email);
+        $limiter->clear(LoginThrottleSubscriber::SCOPE, LoginThrottleSubscriber::pair($email, $request->getClientIp()));
 
         return $this->json(['message' => 'Mot de passe réinitialisé.']);
     }

@@ -13,6 +13,7 @@ use App\Repository\BonplanRepository;
 use App\Repository\StationRepository;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Component\HttpKernel\Exception\BadRequestHttpException;
+use Symfony\Component\HttpKernel\Exception\TooManyRequestsHttpException;
 
 /**
  * Bons plans (spots) autour des stations + favoris de l'utilisateur.
@@ -23,6 +24,8 @@ final class BonplanService
     private const MAX_TITLE = 150;
     private const MAX_ADDRESS = 255;
     private const MAX_DESCRIPTION = 1000;
+    /** Propositions par compte et par 24 h : au-delà, la file de modération du site serait noyée. */
+    private const MAX_SUBMISSIONS_PER_DAY = 10;
 
     public function __construct(
         private readonly BonplanRepository $bonplans,
@@ -171,6 +174,13 @@ final class BonplanService
         }
         if (mb_strlen($description) > self::MAX_DESCRIPTION) {
             throw new BadRequestHttpException(sprintf('La description ne peut pas dépasser %d caractères.', self::MAX_DESCRIPTION));
+        }
+
+        $recent = (int) $this->em->createQuery('SELECT COUNT(b.id) FROM '.Bonplan::class.' b WHERE b.submittedBy = :user AND b.createdAt > :since')
+            ->setParameters(['user' => $user, 'since' => new \DateTimeImmutable('-24 hours')])
+            ->getSingleScalarResult();
+        if ($recent >= self::MAX_SUBMISSIONS_PER_DAY) {
+            throw new TooManyRequestsHttpException(3600, 'Tu as déjà proposé beaucoup de lieux aujourd\'hui. Reviens demain !');
         }
 
         $category = (string) ($data['category'] ?? 'other');
