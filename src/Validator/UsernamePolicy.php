@@ -20,13 +20,13 @@ final class UsernamePolicy
     private const RESERVED_PREFIXES = ['admin', 'moderat', 'alabonnestation'];
 
     private const SEQUENCE_LENGTH = 4;
-    /** Liste du site (`NoInappropriateWordsValidator::FORBIDDEN_WORDS`), cherchée n'importe où dans le pseudo. */
-    private const FORBIDDEN_WORDS = [
-        'admin', 'administrator', 'moderator', 'moderateur', 'root', 'system', 'support', 'test',
-        'caca', 'pipi', 'merde', 'connard', 'salope', 'putain', 'pute', 'nazi', 'hitler', 'fuck',
-        'shit', 'ass', 'bitch', 'dick', 'penis', 'vagina', 'sex', 'porn', 'xxx', 'fdp', 'ntm',
-        'enculé', 'encule', 'bite', 'couille', 'chatte', 'con', 'connasse', 'salaud', 'batard',
-    ];
+    /** Mots refusés où qu'ils soient dans le pseudo : assez longs pour ne pas tomber dans un prénom. */
+    private const FORBIDDEN_ANYWHERE = ['admin', 'administrator', 'moderator', 'moderateur', 'merde', 'connard', 'connasse', 'salope', 'putain', 'hitler', 'fuck', 'shit', 'bitch', 'penis', 'vagina', 'porn', 'encule', 'couille', 'salaud', 'batard'];
+    /**
+     * Mots courts, refusés seulement quand ils forment un mot à eux seuls (« con », « con_75 »,
+     * « le-con ») : cherchés partout, ils interdisaient « Constance », « Cassandre » ou « Essex ».
+     */
+    private const FORBIDDEN_WHOLE = ['con', 'ass', 'sex', 'bite', 'pute', 'test', 'root', 'dick', 'nazi', 'caca', 'pipi', 'chatte', 'system', 'support', 'fdp', 'ntm', 'xxx'];
     private const KEYBOARD_SEQUENCES = ['azerty', 'qwerty', 'azertyuiop', 'qwertyuiop', 'asdfgh', 'zxcvbn', '123456', 'abcdef', '098765'];
     /** Lettres et chiffres qui se ressemblent : « 4dm1n » est lu comme « admin ». */
     private const LOOKALIKES = ['a' => '[a@4]', 'e' => '[e3]', 'i' => '[i1!]', 'o' => '[o0]', 's' => '[s5$]', 't' => '[t7]', 'l' => '[l1]', 'g' => '[g9]', 'b' => '[b8]'];
@@ -56,16 +56,14 @@ final class UsernamePolicy
     }
 
     /**
-     * Les contrôles du site (`NoInappropriateWordsValidator`), recopiés à l'identique : mots
+     * Les contrôles du site (`NoInappropriateWordsValidator`), identiques des deux côtés : mots
      * interdits et leurs variantes chiffrées, répétitions, suites de clavier, suites logiques.
      * ⚠️ Toute retouche est à faire des deux côtés.
      */
     private static function inappropriateError(string $lower): ?string
     {
-        foreach (self::FORBIDDEN_WORDS as $word) {
-            if (preg_match('/'.strtr($word, self::LOOKALIKES).'/i', $lower) === 1) {
-                return 'Ce pseudo n\'est pas valide';
-            }
+        if (self::hasForbiddenWord($lower)) {
+            return 'Ce pseudo n\'est pas valide';
         }
         if (preg_match('/(.)\1{2,}/', $lower) === 1) {
             return 'Le pseudo ne peut pas contenir plus de 2 caractères identiques consécutifs (ex: aaa, zzz).';
@@ -83,6 +81,32 @@ final class UsernamePolicy
         }
 
         return null;
+    }
+
+    /** Mots interdits, y compris écrits avec des chiffres (« 4dm1n », « c0n »). */
+    private static function hasForbiddenWord(string $lower): bool
+    {
+        foreach (self::FORBIDDEN_ANYWHERE as $word) {
+            if (preg_match('/'.strtr($word, self::LOOKALIKES).'/', $lower) === 1) {
+                return true;
+            }
+        }
+
+        // Un « mot » = ce que séparent tirets et tirets bas, et aussi chaque suite de lettres.
+        $tokens = array_merge(preg_split('/[_-]+/', $lower) ?: [], preg_split('/[^a-z]+/', $lower) ?: []);
+        foreach ($tokens as $token) {
+            // Sans lettre, ce n'est qu'un nombre (« 455 » n'est pas « ass »).
+            if (preg_match('/[a-z]/', $token) !== 1) {
+                continue;
+            }
+            foreach (self::FORBIDDEN_WHOLE as $word) {
+                if (preg_match('/^'.strtr($word, self::LOOKALIKES).'$/', $token) === 1) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
     }
 
     /** Quatre caractères qui se suivent, dans un sens ou dans l'autre (abcd, 1234, 9876). */
